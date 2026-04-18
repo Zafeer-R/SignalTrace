@@ -1,0 +1,6 @@
+kafka-python
+requests
+pyspark
+spacy
+python-dotenv
+uuid

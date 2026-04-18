@@ -10,8 +10,8 @@ Mark tasks `[x]` as you complete them.
 
 Goal: `docker-compose up -d` works end to end before writing a single line of application code.
 
-- [ ] Initialize git repo, create `main` branch
-- [ ] Create folder structure exactly as documented in README:
+- [x] Initialize git repo, create `main` branch
+- [x] Create folder structure exactly as documented in README: [mkdir producer, spark ..]
   ```
   producer/
   spark/
@@ -19,28 +19,30 @@ Goal: `docker-compose up -d` works end to end before writing a single line of ap
   kibana/
   schemas/
   ```
-- [ ] Write `docker-compose.yml` with the following services:
+- [x] Write `docker-compose.yml` with the following services: [ni docker-compose.yml -ItemType File]
   - Zookeeper
   - Kafka (broker)
   - Elasticsearch
   - Logstash
   - Kibana
-- [ ] Verify all 5 services start cleanly with `docker-compose up -d`
-- [ ] Verify Kibana is reachable at `http://localhost:5601`
-- [ ] Create `.env.example` with placeholder keys:
+- [x] Create a placeholder `logstash/pipeline.conf` so the Logstash volume mount in `docker-compose.yml` points to a real file before startup
+- [x] Verify all 5 services start cleanly with `docker-compose up -d`
+- [x] Verify Kibana is reachable at `http://localhost:5601`
+- [x] Create `.env.example` with placeholder keys:
   ```
   FINNHUB_API_KEY=your_key_here
   NEWSAPI_KEY=your_key_here
   KAFKA_BOOTSTRAP=localhost:9092
   ```
-- [ ] Create `requirements.txt` with initial dependencies:
+- [x] Create `requirements.txt` with initial dependencies:
   - `kafka-python`
   - `requests`
   - `pyspark`
   - `spacy`
   - `python-dotenv`
   - `uuid`
-- [ ] Confirm `pip install -r requirements.txt` and `python -m spacy download en_core_web_sm` run without errors
+- [x] Create and activate a virtual environment for local Python development before installing dependencies
+- [x] Confirm venv creation, `pip install -r requirements.txt`, and `python -m spacy download en_core_web_sm` run without errors
 
 **Checkpoint:** Infrastructure is running. No application code exists yet, but the environment is ready.
 
@@ -181,6 +183,7 @@ Goal: Events from `entity-counts` are indexed into Elasticsearch automatically v
   - Filter: Parse JSON payload, map fields
   - Output: Elasticsearch index `entity-counts-%{+YYYY.MM.dd}`
 - [ ] Mount `logstash/pipeline.conf` into the Logstash container via `docker-compose.yml`
+- [ ] Verify Logstash is loading only the intended project pipeline config and not the image's default Beats pipeline
 - [ ] Restart Logstash and verify pipeline starts without errors:
   ```bash
   docker logs logstash
@@ -242,7 +245,7 @@ Do these only after Phase 8 is fully complete. These are the "What I'd Extend Ne
 
 | Phase | Description | Status |
 |---|---|---|
-| 1 | Repo skeleton + Docker infrastructure | Not started |
+| 1 | Repo skeleton + Docker infrastructure | complete |
 | 2 | Event schemas + config | Not started |
 | 3 | Kafka topics | Not started |
 | 4 | Python producer | Not started |
