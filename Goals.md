@@ -91,7 +91,7 @@ Goal: Schema files exist and are the source of truth for field names used everyw
 
 Goal: Both topics exist in the running Kafka broker with correct partition counts.
 
-- [ ] Create `raw-articles` topic (3 partitions, replication-factor 1):
+- [x] Create `raw-articles` topic (3 partitions, replication-factor 1):
   ```bash
   docker exec -it kafka kafka-topics.sh --create \
     --bootstrap-server localhost:9092 \
@@ -99,7 +99,7 @@ Goal: Both topics exist in the running Kafka broker with correct partition count
     --partitions 3 \
     --replication-factor 1
   ```
-- [ ] Create `entity-counts` topic (3 partitions, replication-factor 1):
+- [x] Create `entity-counts` topic (3 partitions, replication-factor 1):
   ```bash
   docker exec -it kafka kafka-topics.sh --create \
     --bootstrap-server localhost:9092 \
@@ -107,7 +107,7 @@ Goal: Both topics exist in the running Kafka broker with correct partition count
     --partitions 3 \
     --replication-factor 1
   ```
-- [ ] Verify both topics exist:
+- [x] Verify both topics exist:
   ```bash
   docker exec -it kafka kafka-topics.sh --list --bootstrap-server localhost:9092
   ```
