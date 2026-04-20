@@ -193,3 +193,145 @@ Status: Complete
 - `config.py`
 - `Goals.md`
 - `context/project_context.md`
+
+---
+
+## Phase 3 Summary
+
+Status: Complete
+
+### Completed work
+
+- Created Kafka topic `raw-articles` with:
+  - `3` partitions
+  - replication factor `1`
+- Created Kafka topic `entity-counts` with:
+  - `3` partitions
+  - replication factor `1`
+- Verified both topics exist in the running Kafka broker
+
+### Errors encountered in Phase 3
+
+#### 1. PowerShell line continuation broke Kafka CLI commands
+
+- The documented Kafka examples were pasted using Bash-style line continuation with `\`
+- In PowerShell, `\` does not continue a command onto the next line
+- Effect:
+  - PowerShell attempted to run fragments like `bootstrap-server`, `topic`, `partitions`, and `replication-factor` as separate commands
+  - this produced `CommandNotFoundException` errors
+- Resolution:
+  - use one-line Kafka commands in PowerShell, or
+  - use PowerShell backticks `` ` `` for multiline commands
+
+#### 2. Misparsed topic-create command produced Kafka option error
+
+- Error seen:
+  - `Only one of --bootstrap-server or --zookeeper must be specified`
+- Cause:
+  - the multiline command was broken by PowerShell before Kafka parsed it correctly
+- Resolution:
+  - rerun the command as a valid single-line PowerShell command
+
+### Decisions and carry-forward notes
+
+- Any Kafka CLI command documented for this repo should be translated to PowerShell-safe syntax when used locally on Windows
+- The canonical Phase 3 topics are:
+  - `raw-articles`
+  - `entity-counts`
+- These topics are now infrastructure dependencies for later phases:
+  - Phase 4 writes to `raw-articles`
+  - Phase 5 reads `raw-articles` and writes `entity-counts`
+  - Phase 6 consumes `entity-counts`
+
+### Files created or updated during Phase 3
+
+- `Goals.md`
+- `context/project_context.md`
+
+---
+
+## Phase 4 Summary
+
+Status: Complete, with one quality caveat noted below
+
+### Completed work
+
+- Implemented `producer/news_producer.py`
+- Wired the producer to load environment variables from `.env`
+- Added repo-root config usage by importing:
+  - `KAFKA_BOOTSTRAP`
+  - `FETCH_INTERVAL_SEC`
+  from root `config.py`
+- Implemented Finnhub polling against:
+  - `https://finnhub.io/api/v1/news`
+  - category `general`
+- Normalized upstream articles into the exact `schemas/raw_article.json` contract:
+  - `event_id`
+  - `source`
+  - `fetched_at`
+  - `headline`
+  - `body`
+  - `url`
+  - `category`
+- Added Kafka publishing to topic `raw-articles` using `kafka-python`
+- Added request timeout protection for the Finnhub API call
+- Added retry-safe loop behavior so transient API or runtime failures log and retry instead of terminating the process
+- Added a `main()` entry point so the producer does not start an infinite loop on import
+- Fixed module import behavior so running:
+  - `python producer/news_producer.py`
+  can still import the repo-root `config.py`
+
+### Errors encountered in Phase 4
+
+#### 1. Initial producer published raw Finnhub payloads instead of schema-shaped events
+
+- The first version sent the upstream article object directly to Kafka
+- This would have broken the Phase 4 schema contract and the Phase 5 Spark reader expectations
+- Resolution:
+  - added explicit normalization into the repo's raw-article schema
+
+#### 2. Config drift in fetch interval
+
+- The first version defaulted `FETCH_INTERVAL_SEC` to `3600`
+- Repo configuration requires the default to come from root `config.py`, where the default is `10`
+- Resolution:
+  - import config from root `config.py` instead of redefining it in the producer
+
+#### 3. Repo-root import failure when running the producer directly
+
+- Error seen:
+  - `ModuleNotFoundError: No module named 'config'`
+- Cause:
+  - running `python producer/news_producer.py` places `producer/` on `sys.path`, not the repo root
+- Resolution:
+  - prepend the repo root to `sys.path` before importing `config`
+
+#### 4. PowerShell line continuation broke the Kafka smoke-test command
+
+- The topic consumer command was initially pasted using Bash-style `\`
+- PowerShell split the command and attempted to run fragments like `bootstrap-server`, `topic`, and `from-beginning` as separate commands
+- Resolution:
+  - use one-line commands in PowerShell, or
+  - use PowerShell backticks `` ` `` for multiline commands
+
+### Decisions and carry-forward notes
+
+- The producer currently uses Finnhub `summary` as the best available source for schema field `body`
+- The producer uses current UTC time for `fetched_at` when the event is created, not the upstream publication timestamp
+- Kafka send calls wait for broker acknowledgement with `.get(timeout=10)` to surface delivery failures promptly
+- The producer now satisfies the written Phase 4 goals, assuming the local smoke test was run successfully
+
+#### Quality caveat to revisit
+
+- The current producer does not deduplicate overlapping Finnhub results across polling cycles
+- Practical effect:
+  - the same article may be published more than once if Finnhub returns it in multiple fetch batches
+- This does not block Phase 4 completion under the written checklist, but it can inflate entity counts later in Phase 5 and downstream visualizations in Phase 7
+- Recommended follow-up:
+  - add lightweight deduplication using a stable upstream identifier such as article URL or Finnhub article ID, with a bounded in-memory cache
+
+### Files created or updated during Phase 4
+
+- `producer/news_producer.py`
+- `Goals.md`
+- `context/project_context.md`

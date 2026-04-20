@@ -120,15 +120,15 @@ Goal: Both topics exist in the running Kafka broker with correct partition count
 
 Goal: `producer/news_producer.py` runs, fetches real articles, and publishes valid `raw-articles` events to Kafka continuously.
 
-- [ ] Implement Finnhub or NewsAPI client (pick one, get API key from `.env`)
-- [ ] Write fetch loop that polls every `FETCH_INTERVAL_SEC` seconds
-- [ ] For each article, construct a JSON payload matching `schemas/raw_article.json` exactly:
+- [x] Implement Finnhub or NewsAPI client (pick one, get API key from `.env`)
+- [x] Write fetch loop that polls every `FETCH_INTERVAL_SEC` seconds
+- [x] For each article, construct a JSON payload matching `schemas/raw_article.json` exactly:
   - Generate `event_id` with `uuid.uuid4()`
   - Set `fetched_at` to current UTC ISO-8601 timestamp
   - Map API response fields to schema fields
-- [ ] Serialize payload to JSON and publish to `raw-articles` topic using `kafka-python`
-- [ ] Add basic error handling: API failures should log and retry, not crash the loop
-- [ ] Smoke test: run the producer for 60 seconds, then consume from `raw-articles` manually to confirm events are flowing:
+- [x] Serialize payload to JSON and publish to `raw-articles` topic using `kafka-python`
+- [x] Add basic error handling: API failures should log and retry, not crash the loop
+- [x] Smoke test: run the producer for 60 seconds, then consume from `raw-articles` manually to confirm events are flowing:
   ```bash
   docker exec -it kafka kafka-console-consumer.sh \
     --bootstrap-server localhost:9092 \
