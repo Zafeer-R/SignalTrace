@@ -52,7 +52,7 @@ Goal: `docker-compose up -d` works end to end before writing a single line of ap
 
 Goal: Schema files exist and are the source of truth for field names used everywhere else.
 
-- [ ] Create `schemas/raw_article.json`:
+- [x] Create `schemas/raw_article.json`:
   ```json
   {
     "event_id": "uuid-v4",
@@ -64,7 +64,7 @@ Goal: Schema files exist and are the source of truth for field names used everyw
     "category": "string"
   }
   ```
-- [ ] Create `schemas/entity_count.json`:
+- [x] Create `schemas/entity_count.json`:
   ```json
   {
     "window_start": "ISO-8601 timestamp",
@@ -75,7 +75,7 @@ Goal: Schema files exist and are the source of truth for field names used everyw
     "trigger_at": "ISO-8601 timestamp"
   }
   ```
-- [ ] Write `config.py` in repo root with all configurable parameters:
+- [x] Write `config.py` in repo root with all configurable parameters:
   - `KAFKA_BOOTSTRAP`
   - `FETCH_INTERVAL_SEC` (default: 10)
   - `WINDOW_DURATION` (default: "5 minutes")

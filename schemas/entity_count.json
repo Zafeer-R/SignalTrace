@@ -1,0 +1,8 @@
+{
+  "window_start": "ISO-8601 timestamp",
+  "window_end": "ISO-8601 timestamp",
+  "entity": "string",
+  "entity_type": "ORG | PERSON | GPE | PRODUCT",
+  "count": "integer",
+  "trigger_at": "ISO-8601 timestamp"
+}

@@ -157,3 +157,39 @@ Status: Complete
 - `scripts/validate_phase1.ps1`
 - `Goals.md`
 
+---
+
+## Phase 2 Summary
+
+Status: Complete
+
+### Completed work
+
+- Created `schemas/raw_article.json` as the source-of-truth contract for `raw-articles`
+- Created `schemas/entity_count.json` as the source-of-truth contract for `entity-counts`
+- Added root-level `config.py` with environment-driven defaults for:
+  - `KAFKA_BOOTSTRAP`
+  - `FETCH_INTERVAL_SEC`
+  - `WINDOW_DURATION`
+  - `SLIDE_DURATION`
+  - `TOP_N_ENTITIES`
+  - `NER_MODEL`
+- Removed placeholder drift that would have caused confusion later:
+  - deleted `schemas/raw_articles.json`
+  - deleted `schemas/config.py`
+
+### Decisions and carry-forward notes
+
+- Canonical schema filenames are singular and match the README exactly:
+  - `schemas/raw_article.json`
+  - `schemas/entity_count.json`
+- Runtime configuration lives at repo root in `config.py`, not under `schemas/`
+- Future code in the producer, Spark job, and Logstash config should use these exact field names to avoid contract drift
+
+### Files created or updated during Phase 2
+
+- `schemas/raw_article.json`
+- `schemas/entity_count.json`
+- `config.py`
+- `Goals.md`
+- `context/project_context.md`

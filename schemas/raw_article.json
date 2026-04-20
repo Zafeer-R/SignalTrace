@@ -1,0 +1,9 @@
+{
+  "event_id": "uuid-v4",
+  "source": "finnhub | newsapi",
+  "fetched_at": "ISO-8601 timestamp",
+  "headline": "string",
+  "body": "string | null",
+  "url": "string",
+  "category": "string"
+}
