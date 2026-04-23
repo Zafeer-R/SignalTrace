@@ -117,6 +117,24 @@ Status: Complete
 - On the user side, `docker compose ps` and `docker logs` succeeded
 - Practical takeaway: when container state needs confirmation, prefer the user's direct Docker output if agent-side Docker access is restricted
 
+#### 11. Docker Desktop Linux engine pipe unavailable
+
+- Error seen:
+  - `unable to get image 'wurstmeister/zookeeper': error during connect: Get "http://%2F%2F.%2Fpipe%2FdockerDesktopLinuxEngine/v1.51/images/wurstmeister/zookeeper/json": open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.`
+- Cause:
+  - Docker Desktop was not fully running, or its Linux container engine was unavailable
+  - on Windows, the Docker CLI talks to Docker Desktop through the named pipe `//./pipe/dockerDesktopLinuxEngine`
+  - if that pipe does not exist, Docker commands fail before image pulls or container startup begin
+- Resolution:
+  - start or restart Docker Desktop
+  - wait until Docker reports that it is running
+  - ensure Docker Desktop is using Linux containers
+  - verify with:
+    - `docker version`
+    - `docker info`
+  - rerun:
+    - `docker-compose up -d`
+
 ### Decisions and carry-forward notes
 
 #### A. Logstash default pipeline behavior must be revisited in Phase 6
@@ -335,3 +353,275 @@ Status: Complete, with one quality caveat noted below
 - `producer/news_producer.py`
 - `Goals.md`
 - `context/project_context.md`
+
+---
+
+## Phase 5 Troubleshooting Summary
+
+Status: Functionally complete, with a restart/checkpoint caveat
+
+### Current problem
+
+- PySpark/Spark startup is failing on Windows before any real streaming logic can run
+- This is currently blocking implementation and runtime validation of `spark/entity_stream.py`
+
+### Errors encountered in Phase 5 setup
+
+#### 1. `spark-submit` resolved to the virtual environment wrapper, not a standalone Spark install
+
+- `Get-Command spark-submit` returned:
+  - `D:\Message-Analysis-RealTime\.venv\Scripts\spark-submit.cmd`
+- This confirmed the project is relying on the `pyspark` package's Windows launcher inside the venv
+
+#### 2. `SPARK_HOME` was initially unset
+
+- `$env:SPARK_HOME` returned nothing
+- Spark startup attempted to infer `SPARK_HOME` automatically and failed
+
+#### 3. Spark Windows launcher defaulted to `python3`, which is not valid in this environment
+
+- Error seen:
+  - `Missing Python executable 'python3'`
+- Cause:
+  - the Windows helper script `find-spark-home.cmd` defaults to `python3` unless `PYSPARK_PYTHON` or `PYSPARK_DRIVER_PYTHON` is explicitly set
+
+#### 4. Spark launcher failed with:
+
+- `The system cannot find the path specified.`
+- `Failed to find Spark jars directory.`
+- `You need to build Spark before running this program.`
+
+- Initial interpretation:
+  - Spark was inferring the wrong `SPARK_HOME`
+  - the launcher was falling back to the repo root or another invalid location
+
+#### 5. Direct execution through Python hit the same startup problem
+
+- Running:
+  - `.\.venv\Scripts\python.exe spark\entity_stream.py`
+  still failed with:
+  - `The system cannot find the path specified.`
+- This indicates the failure is not limited to the top-level `spark-submit` command and is likely inside PySpark's Windows helper/launcher path
+
+#### 6. Pip-installed PySpark layout differs from what the Windows batch helpers appear to expect
+
+- The venv PySpark install does contain:
+  - `bin/`
+  - `jars/`
+- But it does not contain:
+  - `conf/`
+- One likely hypothesis is that the Windows batch launcher path assumes a fuller Spark distribution layout than the pip install provides on this machine
+
+### Resolution and investigation steps already tried
+
+- Verified `java -version` works correctly:
+  - OpenJDK 17 is installed and available
+- Verified these paths exist:
+  - `.venv\Lib\site-packages\pyspark`
+  - `.venv\Lib\site-packages\pyspark\bin\spark-submit.cmd`
+  - `.venv\Lib\site-packages\pyspark\jars`
+  - `.venv\Scripts\python.exe`
+- Set the following environment variables explicitly in PowerShell:
+  - `SPARK_HOME=D:\Message-Analysis-RealTime\.venv\Lib\site-packages\pyspark`
+  - `PYSPARK_PYTHON=D:\Message-Analysis-RealTime\.venv\Scripts\python.exe`
+  - `PYSPARK_DRIVER_PYTHON=D:\Message-Analysis-RealTime\.venv\Scripts\python.exe`
+  - prepended `%SPARK_HOME%\bin` to `PATH`
+- Confirmed those environment variables and paths evaluate correctly with:
+  - `$env:SPARK_HOME`
+  - `$env:PYSPARK_PYTHON`
+  - `$env:PYSPARK_DRIVER_PYTHON`
+  - `Test-Path`
+- Tried running the direct launcher:
+  - `& "$env:SPARK_HOME\bin\spark-submit.cmd" --version`
+- Tried resolving the Python path explicitly with `Resolve-Path`
+- Tried running the minimal Spark script directly with:
+  - `.\.venv\Scripts\python.exe spark\entity_stream.py`
+- Tried adding Kafka package config directly in code:
+  - `spark.jars.packages=org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0`
+
+### Current working hypothesis
+
+- The blocker is not Java, the existence of Spark jars, or the basic presence of PySpark files
+- The blocker is most likely PySpark's Windows batch-launcher path resolution in this pip-based venv setup
+- A standalone Spark distribution may be more reliable on Windows than the pip-installed wrapper flow for this project
+
+### Carry-forward notes
+
+- Before continuing serious Phase 5 implementation work, Spark startup itself must be made reliable
+- If the pip-installed `pyspark` launcher continues to fail, the fallback path is:
+  - install a standalone Apache Spark distribution
+  - set `SPARK_HOME` to that standalone install
+  - use its `bin\spark-submit.cmd`
+- Once Spark startup is fixed, Phase 5 implementation can proceed with:
+  - reading `raw-articles`
+  - parsing `schemas/raw_article.json`
+  - running NER
+  - producing `entity-counts`
+
+### Files created or updated during Phase 5 troubleshooting
+
+- `spark/entity_stream.py`
+- `context/project_context.md`
+
+### Additional Phase 5 investigation and current state
+
+#### What was verified
+
+- `producer/news_producer.py` is able to fetch Finnhub articles and publish them to Kafka
+- Consuming `raw-articles` manually shows many valid JSON events
+- Spark can now start on the machine after earlier launcher/setup fixes
+- The Kafka connector package mismatch was identified and corrected once the actual Spark runtime version was confirmed as `4.1.1`
+
+#### Errors and failure patterns seen after Spark startup
+
+##### 1. Kafka connector version mismatch
+
+- Error seen:
+  - `java.lang.NoSuchMethodError: scala.Predef$.wrapRefArray`
+- Cause:
+  - the Kafka package originally used in `spark/entity_stream.py` targeted the wrong Spark/Scala runtime
+- Resolution attempted:
+  - confirmed runtime Spark version was `4.1.1`
+  - updated connector target to the Spark 4.1.1 / Scala 2.13 artifact
+
+##### 2. Local executor / driver instability on native Windows
+
+- Errors seen:
+  - `NullPointerException` in `BlockManagerMasterEndpoint.register()`
+  - repeated heartbeat / RPC timeout failures
+- Cause:
+  - exact root cause still not fully proven, but the failure pattern is in Spark local runtime coordination on Windows rather than in Kafka topic setup
+- Resolution attempted:
+  - forced local mode with a single worker:
+    - `master("local[1]")`
+  - set:
+    - `spark.driver.host=127.0.0.1`
+    - `spark.driver.bindAddress=127.0.0.1`
+    - `spark.local.hostname=127.0.0.1`
+  - increased:
+    - `spark.network.timeout`
+    - `spark.executor.heartbeatInterval`
+    - `spark.rpc.askTimeout`
+  - disabled:
+    - shuffle service in local mode
+    - Hadoop native library usage
+
+##### 3. Streaming append mode rejected without watermark
+
+- Error seen:
+  - `Invalid streaming output mode: append. This output mode is not supported for streaming aggregations without watermark`
+- Cause:
+  - the stream performs windowed aggregation and was trying to use `append` mode without watermarking
+- Resolution attempted:
+  - added watermark on `fetched_at_ts` before the windowed aggregation
+
+##### 4. No visible output on `entity-counts`
+
+- Observation:
+  - `raw-articles` shows many incoming article events
+  - `entity-counts` shows zero messages
+- Why this matters:
+  - this strongly suggests the issue is in `spark/entity_stream.py`, either in parsing, entity extraction, aggregation, or Kafka sink output
+
+#### Why things may not be working right now
+
+1. Event-time parsing may have been dropping rows silently
+
+- `entity_stream.py` filters out rows where `fetched_at_ts` is null
+- If Spark cannot parse `fetched_at`, the rest of the stream becomes empty
+- A deeper contract fix was applied:
+  - producer now emits `fetched_at` in a single canonical UTC format:
+    - `YYYY-MM-DDTHH:MM:SSZ`
+  - Spark now parses that exact shape with:
+    - `yyyy-MM-dd'T'HH:mm:ssX`
+
+2. Watermark + append mode may delay output enough to look broken during debugging
+
+- The current design uses:
+  - watermark
+  - sliding window aggregation
+  - append mode
+- That means output is not necessarily immediate
+- Even if processing is correct, results may not appear right away in `entity-counts`
+
+3. Native Windows Spark stability remains a likely environmental risk
+
+- Even after several local-mode hardening changes, Spark has shown Windows-specific instability patterns
+- This may still interfere with consistent query execution
+
+#### Steps taken during debugging
+
+- Ran `entity_stream.py` in full Kafka-output mode
+- Switched `entity_stream.py` temporarily to console sink for direct inspection
+- Simplified the stream to parsing-stage debug output to isolate where rows might be disappearing
+- Restored the full pipeline after tightening the producer/Spark timestamp contract
+- Added human-readable per-run logs under:
+  - `spark/logs/`
+- Kept Spark checkpoints under:
+  - `spark/checkpoints/entity_stream/`
+
+#### Current design notes
+
+- `spark/checkpoints/entity_stream/` is Spark recovery/state data, not human-readable logs
+- `spark/logs/` contains per-run application log files for manual inspection
+- `entity_stream.py` currently reads from `raw-articles`, extracts entities, applies watermark + sliding window aggregation, and writes to `entity-counts`
+
+#### Potential ways to make Phase 5 work reliably
+
+1. Continue validating the current native Windows setup
+
+- Keep producer and Spark running together
+- Inspect the latest file under `spark/logs/`
+- Confirm whether the stream is staying active or terminating silently
+- If needed, add one more controlled console checkpoint after timestamp parsing or after entity extraction
+
+2. Reduce streaming complexity temporarily for proof of life
+
+- Temporarily bypass the aggregation and Kafka sink
+- Print parsed rows or exploded entity rows directly to the console
+- Use this only to confirm the exact stage where data disappears, then restore the full pipeline
+
+3. Add duplicate suppression in the producer
+
+- This does not fix the current Spark failure directly
+- But it will prevent repeated Finnhub articles from inflating counts once Phase 5 starts working
+
+4. Move Spark execution to WSL2 if native Windows remains unstable
+
+- This is the strongest fallback if Spark continues to fail in native Windows local mode
+- It avoids a large class of Windows-specific launcher, temp-file, and local runtime issues
+
+5. Use a standalone Spark distribution consistently if pip-installed runtime behavior remains inconsistent
+
+- The project already moved through launcher/runtime ambiguity during setup
+- A dedicated Spark install may be more predictable than relying on pip-installed PySpark wrappers on Windows
+
+#### Honest current status
+
+- The producer side is working
+- Kafka input topic `raw-articles` is confirmed to have valid events
+- Phase 5 is now functionally complete: `spark/entity_stream.py` has produced valid end-to-end output in `entity-counts`
+- Example observed output:
+  - `{"window_start":"2026-04-23 00:10:00","window_end":"2026-04-23 00:15:00","entity":"The International Maritime Organization","entity_type":"ORG","count":28,"trigger_at":"2026-04-23 00:20:36.604"}`
+- Remaining caveat:
+  - restartability is not yet fully clean across all runs
+  - during debugging and after stateful query changes, rerunning sometimes required deleting:
+    - `spark/checkpoints/entity_stream`
+  - this means the stream logic works, but checkpoint reuse is not yet fully hardened
+
+### Final Phase 5 working state
+
+- Running Spark from WSL2 avoided the earlier native Windows Hadoop/checkpoint crash
+- The current stream can:
+  - read `raw-articles`
+  - parse the article schema
+  - extract allowed entities with spaCy
+  - aggregate over event-time windows
+  - write valid JSON records to `entity-counts`
+
+### Carry-forward notes for later phases
+
+- Spark should be run from WSL2 for the current development workflow
+- If restartability matters later, revisit checkpoint reuse behavior before calling the stream operationally hardened
+- The checkpoint cleanup command used during debugging was:
+  - `rm -rf /mnt/d/Message-Analysis-RealTime/spark/checkpoints/entity_stream`

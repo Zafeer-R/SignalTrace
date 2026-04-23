@@ -74,7 +74,7 @@ def normalize_article(article: dict) -> dict | None:
     return {
         "event_id": str(uuid.uuid4()),
         "source": "finnhub",
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "headline": headline,
         "body": article.get("summary") or None,
         "url": url,

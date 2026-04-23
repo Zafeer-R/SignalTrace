@@ -144,25 +144,25 @@ Goal: `producer/news_producer.py` runs, fetches real articles, and publishes val
 
 Goal: `spark/entity_stream.py` reads from `raw-articles`, extracts named entities, aggregates counts over a sliding window, and writes enriched events to `entity-counts`.
 
-- [ ] Set up Spark session with Kafka package:
+- [x] Set up Spark session with Kafka package:
   ```
   org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
   ```
-- [ ] Read stream from `raw-articles` topic using `readStream`
-- [ ] Deserialize JSON payloads — define a schema matching `schemas/raw_article.json`
-- [ ] Extract `headline` and `body` fields for NER processing
-- [ ] Apply spaCy NER (`en_core_web_sm`) via a Pandas UDF or `mapInPandas`:
+- [x] Read stream from `raw-articles` topic using `readStream`
+- [x] Deserialize JSON payloads — define a schema matching `schemas/raw_article.json`
+- [x] Extract `headline` and `body` fields for NER processing
+- [x] Apply spaCy NER (`en_core_web_sm`) via a Pandas UDF or `mapInPandas`:
   - Extract entities of types: `ORG`, `PERSON`, `GPE`, `PRODUCT`
   - Normalize entity text (strip whitespace, title-case)
   - Explode: one row per entity per article
-- [ ] Apply sliding window aggregation:
+- [x] Apply sliding window aggregation:
   - Window on `fetched_at` timestamp
-  - `WINDOW_DURATION` = 5 minutes, `SLIDE_DURATION` = 1 minute
+  - `WINDOW_DURATION` = 2 minutes, `SLIDE_DURATION` = 1 minute
   - Group by `(window, entity, entity_type)`, count occurrences
-- [ ] At each trigger, serialize output rows to JSON matching `schemas/entity_count.json`
-- [ ] Write stream to `entity-counts` topic using `writeStream`
-- [ ] Set `startingOffsets` to `"latest"` by default (document how to change to `"earliest"` for replay)
-- [ ] Smoke test: with producer running, start Spark job and consume from `entity-counts` manually:
+- [x] At each trigger, serialize output rows to JSON matching `schemas/entity_count.json`
+- [x] Write stream to `entity-counts` topic using `writeStream`
+- [x] Set `startingOffsets` to `"latest"` by default (document how to change to `"earliest"` for replay)
+- [x] Smoke test: with producer running, start Spark job and consume from `entity-counts` manually:
   ```bash
   docker exec -it kafka kafka-console-consumer.sh \
     --bootstrap-server localhost:9092 \
@@ -171,6 +171,15 @@ Goal: `spark/entity_stream.py` reads from `raw-articles`, extracts named entitie
   ```
 
 **Checkpoint:** `entity-counts` is receiving windowed entity frequency events. Counts update every minute.
+
+Phase 5 Status Update:
+- Functional outcome achieved: `spark/entity_stream.py` has produced valid records in `entity-counts`.
+- Current local tuning:
+  - Spark Kafka package aligned to Spark `4.1.1`
+  - `WINDOW_DURATION` currently tuned to `2 minutes`
+  - `SLIDE_DURATION` remains `1 minute`
+- Known caveat:
+  - During debugging and after query-shape changes, restarting the stream sometimes required deleting `spark/checkpoints/entity_stream` before rerunning. Command to be used - `rm -rf /mnt/d/Message-Analysis-RealTime/spark/checkpoints/entity_stream`
 
 ---
 
@@ -245,11 +254,11 @@ Do these only after Phase 8 is fully complete. These are the "What I'd Extend Ne
 
 | Phase | Description | Status |
 |---|---|---|
-| 1 | Repo skeleton + Docker infrastructure | complete |
-| 2 | Event schemas + config | Not started |
-| 3 | Kafka topics | Not started |
-| 4 | Python producer | Not started |
-| 5 | PySpark streaming job | Not started |
+| 1 | Repo skeleton + Docker infrastructure | Complete |
+| 2 | Event schemas + config | Complete |
+| 3 | Kafka topics | Complete |
+| 4 | Python producer | Complete |
+| 5 | PySpark streaming job | Complete |
 | 6 | Logstash → Elasticsearch | Not started |
 | 7 | Kibana dashboard | Not started |
 | 8 | Polish + GitHub readiness | Not started |
