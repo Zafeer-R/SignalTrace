@@ -1,67 +1,64 @@
 # Real-Time Entity Intelligence Pipeline
 
-A production-style streaming pipeline that ingests live financial news, extracts named entities using NLP, tracks their mention frequency in real-time, and surfaces insights through a live Kibana dashboard — all orchestrated across Kafka, PySpark Structured Streaming, and the Elastic Stack.
+A streaming pipeline that ingests live financial news, extracts named entities, tracks mention frequency in near real time, and surfaces the result in Kibana.
 
-> Built to explore event-driven architecture patterns: durable event schemas, multi-topic routing, stateful stream processing, and real-time visualization.
+> Built to practice event-driven design: explicit schemas, Kafka topic boundaries, stateful stream processing, replayability, and dashboard delivery.
 
 ---
 
 ## What This Does
 
-Every article published to a financial news feed becomes an event. That event flows through a pipeline that:
+Each fetched article becomes an event that moves through this path:
 
-1. **Ingests** live text from Finnhub / NewsAPI via a Python producer
-2. **Publishes** raw article payloads as structured events to Kafka (`raw-articles`)
-3. **Processes** each event in PySpark Structured Streaming — NER extraction, entity normalization, running counts
-4. **Emits** enriched entity-frequency events downstream to a second Kafka topic (`entity-counts`)
-5. **Indexes** events into Elasticsearch via Logstash
-6. **Visualizes** the top 10 trending entities live in Kibana
-
-The pipeline is always on. There is no batch job, no cron trigger, no manual refresh.
+1. A Python producer fetches live news from Finnhub
+2. The producer publishes normalized article events to Kafka topic `raw-articles`
+3. A PySpark Structured Streaming job reads `raw-articles`
+4. Spark extracts named entities with spaCy and computes rolling counts
+5. Spark publishes aggregated entity-count events to Kafka topic `entity-counts`
+6. Logstash reads `entity-counts` and indexes the events into Elasticsearch
+7. Kibana visualizes the top 10 most-mentioned entities in a reusable dashboard
 
 ---
 
 ## Architecture
 
-```
-[Finnhub / NewsAPI]
-        |
-        v
-[Python Producer] ──── Kafka Topic: raw-articles ────> [PySpark Structured Streaming]
-                                                                  |
-                                                         NER (spaCy / Flair)
-                                                         Entity normalization
-                                                         Running window counts
-                                                                  |
-                                                                  v
-                                              Kafka Topic: entity-counts
-                                                                  |
-                                                                  v
-                                                    [Logstash] ──> [Elasticsearch]
-                                                                          |
-                                                                          v
-                                                                    [Kibana Dashboard]
-                                                                    Top 10 Entities
-                                                                    Live Bar Chart
+```text
+[Finnhub]
+    |
+    v
+[Python Producer] --> Kafka topic: raw-articles --> [PySpark Structured Streaming]
+                                                       |
+                                                       v
+                                             Kafka topic: entity-counts
+                                                       |
+                                                       v
+                                                  [Logstash]
+                                                       |
+                                                       v
+                                                [Elasticsearch]
+                                                       |
+                                                       v
+                                             [Kibana Dashboard]
 ```
 
-**Design decisions worth noting:**
+### Why two Kafka topics?
 
-- Two-topic separation (`raw-articles` / `entity-counts`) keeps ingestion decoupled from processing. If the Spark job goes down, raw events are retained in Kafka and can be replayed from offset.
-- Spark's stateful aggregation uses a sliding window (configurable) so entity counts reflect a rolling time horizon, not a forever-accumulating global count.
-- Event schemas are explicit and versioned — both topics have defined field contracts documented below.
+- `raw-articles` is the durable ingestion topic
+- `entity-counts` is the downstream analytics topic
+
+This separation keeps ingestion decoupled from processing. If Spark stops, the producer can still publish raw events. When Spark comes back, it can replay from Kafka offsets instead of re-calling the news API.
 
 ---
 
 ## Event Schemas
 
-### `raw-articles` (Producer → Kafka)
+### `raw-articles`
 
 ```json
 {
   "event_id": "uuid-v4",
-  "source": "finnhub | newsapi",
-  "fetched_at": "ISO-8601 timestamp",
+  "source": "finnhub",
+  "fetched_at": "ISO-8601 UTC timestamp",
   "headline": "string",
   "body": "string | null",
   "url": "string",
@@ -69,7 +66,7 @@ The pipeline is always on. There is no batch job, no cron trigger, no manual ref
 }
 ```
 
-### `entity-counts` (Spark → Kafka)
+### `entity-counts`
 
 ```json
 {
@@ -82,7 +79,10 @@ The pipeline is always on. There is no batch job, no cron trigger, no manual ref
 }
 ```
 
-Explicit schemas are the foundation of reliable event-driven systems. Downstream consumers (Logstash, future services) depend on field contracts, not assumptions.
+The canonical schema files live in:
+
+- `schemas/raw_article.json`
+- `schemas/entity_count.json`
 
 ---
 
@@ -90,15 +90,33 @@ Explicit schemas are the foundation of reliable event-driven systems. Downstream
 
 | Layer | Tool |
 |---|---|
-| Data Source | Finnhub API / NewsAPI |
-| Message Broker | Apache Kafka |
-| Stream Processor | PySpark Structured Streaming |
-| NLP / NER | spaCy (`en_core_web_sm`) |
+| Data Source | Finnhub API |
+| Broker | Apache Kafka |
+| Stream Processing | PySpark Structured Streaming 4.1.1 |
+| NLP | spaCy `en_core_web_sm` |
 | Indexing | Logstash |
-| Search / Storage | Elasticsearch |
-| Visualization | Kibana |
-| Containerization | Docker Compose |
-| Language | Python 3.10+ |
+| Storage / Search | Elasticsearch 7.10.1 |
+| Visualization | Kibana 7.10.1 |
+| Orchestration | Docker Compose |
+| Python Runtime | Python 3.10+ |
+
+---
+
+## Working Development Setup
+
+This repo currently works best with a split local setup:
+
+- Docker Desktop on Windows for infrastructure
+  - Zookeeper
+  - Kafka
+  - Elasticsearch
+  - Kibana
+  - Logstash
+- WSL2 Ubuntu for Python execution
+  - `producer/news_producer.py`
+  - `spark/entity_stream.py`
+
+This avoids the native Windows Spark/Hadoop filesystem problems encountered during development.
 
 ---
 
@@ -106,148 +124,204 @@ Explicit schemas are the foundation of reliable event-driven systems. Downstream
 
 ### Prerequisites
 
-- Docker and Docker Compose installed
-- Python 3.10+
-- A free Finnhub API key: [finnhub.io](https://finnhub.io) (or NewsAPI: [newsapi.org](https://newsapi.org))
+- Docker Desktop
+- WSL2 with Ubuntu
+- Python 3 installed in WSL
+- Java 17 installed in WSL
+- A Finnhub API key
 
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/<your-username>/entity-intelligence-pipeline.git
-cd entity-intelligence-pipeline
+git clone https://github.com/<your-username>/Message-Analysis-RealTime.git
+cd Message-Analysis-RealTime
 ```
 
-### 2. Set environment variables
+### 2. Create the environment file
+
+On Windows or WSL:
 
 ```bash
 cp .env.example .env
-# Edit .env and add your FINNHUB_API_KEY or NEWSAPI_KEY
 ```
 
-### 3. Spin up the infrastructure
+Edit `.env` and set:
 
-```bash
-docker-compose up -d
+```text
+FINNHUB_API_KEY=your_real_key
 ```
 
-This starts Zookeeper, Kafka, Elasticsearch, Logstash, and Kibana. Wait ~30 seconds for Kafka to be ready.
+### 3. Start Docker services on Windows
+
+From PowerShell in the repo root:
+
+```powershell
+docker-compose up -d zookeeper
+docker-compose up -d kafka
+docker-compose up -d elasticsearch
+docker-compose up -d kibana
+docker-compose up -d logstash
+```
 
 ### 4. Create Kafka topics
 
-```bash
-docker exec -it kafka kafka-topics.sh --create \
-  --bootstrap-server localhost:9092 \
-  --topic raw-articles \
-  --partitions 3 \
-  --replication-factor 1
+From PowerShell:
 
-docker exec -it kafka kafka-topics.sh --create \
-  --bootstrap-server localhost:9092 \
-  --topic entity-counts \
-  --partitions 3 \
-  --replication-factor 1
+```powershell
+docker exec -it kafka kafka-topics.sh --create --bootstrap-server localhost:9092 --topic raw-articles --partitions 3 --replication-factor 1
+docker exec -it kafka kafka-topics.sh --create --bootstrap-server localhost:9092 --topic entity-counts --partitions 3 --replication-factor 1
 ```
 
-### 5. Install Python dependencies
+If the topics already exist, Kafka will report that and you can continue.
+
+### 5. Set up Python in WSL
+
+From Ubuntu:
 
 ```bash
-pip install -r requirements.txt
+cd /mnt/d/Message-Analysis-RealTime
+python3 -m venv .venv-wsl
+source .venv-wsl/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
-### 6. Start the producer
+### 6. Start the producer in WSL
+
+Terminal 1:
 
 ```bash
+cd /mnt/d/Message-Analysis-RealTime
+source .venv-wsl/bin/activate
 python producer/news_producer.py
 ```
 
-The producer will begin publishing article events to `raw-articles` every few seconds.
+### 7. Start the Spark stream in WSL
 
-### 7. Start the Spark streaming job
+Terminal 2:
 
 ```bash
-spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
-  spark/entity_stream.py
+cd /mnt/d/Message-Analysis-RealTime
+source .venv-wsl/bin/activate
+python spark/entity_stream.py
 ```
 
-The Spark job will begin consuming from `raw-articles`, extracting entities, and publishing aggregated counts to `entity-counts`.
+If restartability fails after a previous bad run, clear the streaming checkpoint first:
 
-### 8. Open Kibana
+```bash
+rm -rf /mnt/d/Message-Analysis-RealTime/spark/checkpoints/entity_stream
+```
 
-Navigate to [http://localhost:5601](http://localhost:5601).
+### 8. Verify Kafka flow
 
-- Go to **Index Management** and verify `entity-counts-*` is being indexed
-- Open **Discover** to inspect raw event documents
-- Import the dashboard from `kibana/dashboard_export.ndjson` for the pre-built Top 10 Entities bar chart
+From PowerShell:
+
+```powershell
+docker exec -it kafka kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic raw-articles --from-beginning
+docker exec -it kafka kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic entity-counts --from-beginning
+```
+
+### 9. Open Kibana
+
+Open:
+
+- `http://localhost:5601`
+
+Then:
+
+- create or select the `entity-counts-*` data view if needed
+- go to Discover to confirm documents exist
+- import `kibana/dashboard_export.ndjson` if the dashboard is not already present
+- open the `Entity Intelligence - Live` dashboard
+
+For a post-reboot service startup checklist, see:
+
+- `afterRestartInstructions.md`
 
 ---
 
 ## Project Structure
 
-```
-entity-intelligence-pipeline/
-├── producer/
-│   └── news_producer.py        # Fetches live articles, publishes to raw-articles topic
-├── spark/
-│   └── entity_stream.py        # PySpark job: NER extraction + windowed entity counts
-├── logstash/
-│   └── pipeline.conf           # Logstash config: Kafka → Elasticsearch
-├── kibana/
-│   └── dashboard_export.ndjson # Pre-built Kibana dashboard (importable)
-├── schemas/
-│   ├── raw_article.json        # Event schema: raw-articles topic
-│   └── entity_count.json       # Event schema: entity-counts topic
-├── docker-compose.yml
-├── requirements.txt
-├── .env.example
-└── README.md
+```text
+Message-Analysis-RealTime/
+|-- producer/
+|   `-- news_producer.py
+|-- spark/
+|   |-- entity_stream.py
+|   |-- checkpoints/
+|   `-- logs/
+|-- logstash/
+|   `-- pipeline.conf
+|-- kibana/
+|   `-- dashboard_export.ndjson
+|-- schemas/
+|   |-- raw_article.json
+|   `-- entity_count.json
+|-- scripts/
+|   `-- validate_phase1.ps1
+|-- context/
+|   `-- project_context.md
+|-- docker-compose.yml
+|-- config.py
+|-- requirements.txt
+|-- .env.example
+`-- ReadME.md
 ```
 
 ---
 
 ## Configuration
 
-All tuneable parameters live in `config.py` or `.env`:
+Primary tuneable parameters live in `config.py` or `.env`.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `KAFKA_BOOTSTRAP` | `localhost:9092` | Kafka broker address |
-| `FETCH_INTERVAL_SEC` | `10` | How often the producer polls the news API |
-| `WINDOW_DURATION` | `5 minutes` | Spark sliding window for entity counts |
-| `SLIDE_DURATION` | `1 minute` | Slide interval for the window |
-| `TOP_N_ENTITIES` | `10` | Number of entities surfaced in Kibana |
+| `KAFKA_BOOTSTRAP` | `localhost:9092` | Host/WSL Kafka bootstrap address |
+| `FETCH_INTERVAL_SEC` | `10` | Producer poll interval |
+| `WINDOW_DURATION` | `2 minutes` | Rolling Spark aggregation window |
+| `SLIDE_DURATION` | `1 minute` | Spark window slide interval |
+| `TOP_N_ENTITIES` | `10` | Target number of entities surfaced in Kibana |
 | `NER_MODEL` | `en_core_web_sm` | spaCy model used for extraction |
 
 ---
 
-## Kafka Offset Management and Replay
+## Replay and Offsets
 
-One of the more interesting properties of this architecture: because raw article events are persisted in Kafka (retention configurable), the Spark job can be restarted at any offset without data loss. To replay from the beginning:
+The Spark stream currently reads Kafka with:
 
 ```python
-# In entity_stream.py, change:
 .option("startingOffsets", "latest")
-# to:
+```
+
+To replay from the beginning for debugging, change it to:
+
+```python
 .option("startingOffsets", "earliest")
 ```
 
-This is the property that makes event-driven pipelines more resilient than direct API → DB writes.
+Because the pipeline keeps raw events in Kafka, Spark can be restarted and re-run from offsets without re-fetching the original articles.
+
+---
+
+## Known Local Caveat
+
+The Phase 5 stream is functionally complete, but local checkpoint reuse is not yet fully hardened. If the stream fails after an interrupted run, deleting:
+
+```text
+spark/checkpoints/entity_stream
+```
+
+may be required before restarting.
 
 ---
 
 ## What I'd Extend Next
 
-- **Dead letter queue**: Route malformed events to a `raw-articles-dlq` topic instead of dropping them, with a consumer that alerts on parse failures
-- **Schema registry**: Use Confluent Schema Registry to enforce `entity-counts` field contracts at the broker level, not just by convention
-- **Graph layer**: Push `entity-counts` events into a Neo4j graph to model co-occurrence relationships between entities — which companies get mentioned together, in what context, over what time windows
-- **Backpressure handling**: Currently the producer doesn't throttle against Kafka lag; adding a lag monitor that slows fetch rate under consumer backpressure would make this more production-realistic
-
----
-
-## Background
-
-This project was built to develop hands-on intuition for event-driven systems: how events flow, how schemas become contracts between services, and how stateful stream processing differs from batch aggregation. The two-topic pattern, explicit schemas, and replay semantics are all patterns that appear in production data infrastructure — not just streaming tutorials.
+- Add a dead-letter topic for malformed raw article events
+- Add schema validation before producer publish
+- Add a graph layer for entity co-occurrence
+- Add Kafka lag / backpressure monitoring
 
 ---
 
@@ -255,6 +329,6 @@ This project was built to develop hands-on intuition for event-driven systems: h
 
 - [Kafka Quickstart](https://kafka.apache.org/quickstart)
 - [PySpark Structured Streaming Guide](https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html)
-- [spaCy NER Documentation](https://spacy.io/usage/linguistic-features#named-entities)
+- [spaCy Named Entity Recognition](https://spacy.io/usage/linguistic-features#named-entities)
 - [Elastic Stack Downloads](https://www.elastic.co/downloads)
-- [Finnhub Python SDK](https://pypi.org/project/finnhub-python/)
+- [Finnhub API](https://finnhub.io)

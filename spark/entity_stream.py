@@ -36,6 +36,12 @@ if str(ROOT_DIR) not in sys.path:
 
 from config import KAFKA_BOOTSTRAP, NER_MODEL, SLIDE_DURATION, WINDOW_DURATION
 
+# Why two topics?
+# `raw-articles` is the durable ingestion topic and `entity-counts` is the
+# processed analytics topic. Keeping them separate means the producer can
+# continue writing raw events even if Spark is down, and the stream can be
+# replayed from Kafka offsets without re-calling the news API.
+
 # Configure logging
 LOG_DIR = ROOT_DIR / "spark" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -56,7 +62,6 @@ ENTITY_COUNTS_TOPIC = "entity-counts"
 ALLOWED_ENTITY_TYPES = {"ORG", "PERSON", "GPE", "PRODUCT"}
 KAFKA_PACKAGE = "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1"
 FETCHED_AT_FORMAT = "yyyy-MM-dd'T'HH:mm:ssX"
-WINDOW_DURATION = "2 minutes"
 _NLP = None
 
 RAW_ARTICLE_SCHEMA = StructType(
@@ -97,9 +102,13 @@ def extract_entities(text: str):
             return []
 
         if _NLP is None:
+            # Each Python worker loads spaCy lazily the first time the UDF runs.
+            # This avoids fragile function-serialization patterns on Spark.
             _NLP = spacy.load(NER_MODEL)
 
-        doc = _NLP(text[:1000])  # Limit to first 1000 chars to avoid memory issues
+        # Bound the text chunk processed per event so one unusually long article
+        # does not dominate worker memory or latency.
+        doc = _NLP(text[:1000])
         entities = []
         seen = set()
         
@@ -241,6 +250,7 @@ def main() -> None:
         query = (
             stream_df.writeStream.format("kafka")
             .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
+            # This query is stateful; checkpoint reuse matters for restartability.
             .option("checkpointLocation", str(ROOT_DIR / "spark" / "checkpoints" / "entity_stream"))
             .outputMode("append")
             .start()

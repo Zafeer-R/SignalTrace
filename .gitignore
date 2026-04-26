@@ -8,5 +8,4 @@ __pycache__/
 Ass3.pdf
 spark/checkpoints/
 spark/logs/
-afterRestartInstructions.md
-entity-stream-ERROR.md
+helper-docs/

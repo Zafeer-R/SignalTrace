@@ -74,6 +74,8 @@ def normalize_article(article: dict) -> dict | None:
     return {
         "event_id": str(uuid.uuid4()),
         "source": "finnhub",
+        # Spark parses this exact UTC wire format downstream, so keep the
+        # producer timestamp stable and timezone-explicit.
         "fetched_at": datetime.now(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "headline": headline,
         "body": article.get("summary") or None,
@@ -91,6 +93,8 @@ def publish_articles(producer: KafkaProducer, articles: list[dict]) -> int:
             LOGGER.warning("Skipping article missing required headline/url fields: %s", article)
             continue
 
+        # Wait for broker acknowledgement so a successful log line means the
+        # event really reached Kafka, not just the client buffer.
         producer.send(RAW_ARTICLES_TOPIC, event).get(timeout=10)
         published_count += 1
 

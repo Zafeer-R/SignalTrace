@@ -257,19 +257,18 @@ Status update:
 
 Goal: The repo is in a state where Gautham can clone it, follow the README, and have a running pipeline in under 15 minutes.
 
-- [ ] Walk through the entire README quickstart from scratch in a clean environment — fix anything that breaks
-- [ ] Confirm folder structure matches the README exactly
-- [ ] Confirm all config parameters in `config.py` match the table in the README
-- [ ] Add inline comments to `news_producer.py` and `entity_stream.py` explaining non-obvious decisions
-- [ ] Write a short `# Why two topics?` comment block at the top of `entity_stream.py` explaining the decoupling rationale
-- [ ] Ensure `.env` is in `.gitignore` and `.env.example` is committed
-- [ ] Tag the release: `git tag v1.0.0`
+- [x] Walk through the entire README quickstart from scratch in a clean environment — fix anything that breaks
+- [x] Confirm folder structure matches the README exactly
+- [x] Confirm all config parameters in `config.py` match the table in the README
+- [x] Add inline comments to `news_producer.py` and `entity_stream.py` explaining non-obvious decisions
+- [x] Write a short `# Why two topics?` comment block at the top of `entity_stream.py` explaining the decoupling rationale
+- [x] Ensure `.env` is in `.gitignore` and `.env.example` is committed
 
 **Checkpoint:** README is fully honest. Every claim in it is backed by working code.
 
 ---
 
-## Phase 9 — Extensions (Post-Submission, Before Interview)
+## Phase 9 — Extensions
 
 Do these only after Phase 8 is fully complete. These are the "What I'd Extend Next" items from the README — if any are built, move them out of the README extensions section and into the main architecture description.
 
@@ -291,5 +290,5 @@ Do these only after Phase 8 is fully complete. These are the "What I'd Extend Ne
 | 5 | PySpark streaming job | Complete |
 | 6 | Logstash → Elasticsearch | Complete |
 | 7 | Kibana dashboard | Complete |
-| 8 | Polish + GitHub readiness | Not started |
+| 8 | Polish + GitHub readiness | Complete |
 | 9 | Extensions | Not started |
