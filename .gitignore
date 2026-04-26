@@ -1,7 +1,12 @@
 .venv/                                                                                                                                   
-.env                                                                                                                                     
+.env
+.venv-wsl/                                                                                                                              
 __pycache__/                                                                                                                             
 *.pyc                                                                                                                                    
 .vscode/                                                                                                                                 
 .idea/  
 Ass3.pdf
+spark/checkpoints/
+spark/logs/
+afterRestartInstructions.md
+entity-stream-ERROR.md

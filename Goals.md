@@ -202,6 +202,15 @@ Goal: Events from `entity-counts` are indexed into Elasticsearch automatically v
 
 **Checkpoint:** Events flow end to end: NewsAPI → Kafka → Spark → Kafka → Logstash → Elasticsearch.
 
+Phase 6 Status Update:
+- Functional outcome achieved: Logstash is consuming `entity-counts`, Elasticsearch is indexing `entity-counts-*`, and Kibana Discover shows the indexed records.
+- Verified in Kibana:
+  - index/data view exists for `entity-counts-*` or the active daily index
+  - documents are visible in Discover
+  - fields from `schemas/entity_count.json` are present
+- Known follow-up:
+  - it is still worth verifying later that Logstash is loading only the intended project pipeline config and not the image's default Beats pipeline
+
 ---
 
 ## Phase 7 — Kibana Dashboard

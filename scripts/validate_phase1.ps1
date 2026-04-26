@@ -103,7 +103,7 @@ foreach ($entry in $requiredPaths) {
 Check-CommandSucceeds -Description "docker compose config parses successfully" -Command "docker" -Arguments @("compose", "config") | Out-Null
 Check-CommandSucceeds -Description "docker compose ps executes successfully" -Command "docker" -Arguments @("compose", "ps") | Out-Null
 
-$containers = @("zookeeper", "kafka", "elasticsearch", "logstash", "kibana")
+$containers = @("zookeeper", "78e252323029_kafka", "elasticsearch", "logstash", "kibana")
 foreach ($container in $containers) {
     Check-ContainerRunning -ContainerName $container
 }

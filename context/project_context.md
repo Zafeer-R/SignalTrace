@@ -625,3 +625,71 @@ Status: Functionally complete, with a restart/checkpoint caveat
 - If restartability matters later, revisit checkpoint reuse behavior before calling the stream operationally hardened
 - The checkpoint cleanup command used during debugging was:
   - `rm -rf /mnt/d/Message-Analysis-RealTime/spark/checkpoints/entity_stream`
+
+---
+
+## Phase 6 Summary
+
+Status: Complete
+
+### Completed work
+
+- Replaced the placeholder `logstash/pipeline.conf` with a real Kafka -> Elasticsearch pipeline
+- Configured Logstash to consume the `entity-counts` topic
+- Parsed the JSON payloads emitted by Spark
+- Converted `count` to an integer and mapped `trigger_at` into `@timestamp`
+- Indexed records into Elasticsearch daily indices:
+  - `entity-counts-%{+YYYY.MM.dd}`
+- Verified Elasticsearch created and populated the `entity-counts-*` index
+- Verified documents were visible in Kibana after creating/selecting the appropriate data view
+- Verified documents in Kibana Discover contained the expected schema fields:
+  - `window_start`
+  - `window_end`
+  - `entity`
+  - `entity_type`
+  - `count`
+  - `trigger_at`
+
+### Errors encountered in Phase 6
+
+#### 1. Logstash could not connect to Kafka due to advertised listener mismatch
+
+- Error seen in Logstash:
+  - connection attempts to `localhost/127.0.0.1:9092` from inside the container
+- Cause:
+  - Kafka was advertising only `localhost:9092`, which works for host-side clients but not for other containers
+- Resolution:
+  - updated Kafka to use dual listeners:
+    - internal listener for Docker-network clients
+    - external listener for host/WSL clients
+  - updated Logstash to connect to Kafka via the internal listener
+
+#### 2. Kibana initially failed to connect to Elasticsearch consistently
+
+- Symptoms:
+  - `localhost:5601` was not reliably reachable
+  - Kibana logs showed `No living connections` / `ECONNREFUSED` to Elasticsearch during startup
+- Resolution:
+  - restarted services cleanly
+  - brought the stack back up in dependency order
+  - confirmed Kibana eventually became reachable and Discover showed indexed records
+
+### Decisions and carry-forward notes
+
+- Logstash/Elasticsearch flow is now working end to end for the project pipeline
+- Docker service startup order matters for local recovery:
+  - `zookeeper`
+  - `kafka`
+  - `elasticsearch`
+  - `kibana`
+  - `logstash`
+- A remaining hygiene item from the build plan is:
+  - verify Logstash loads only the intended project pipeline config and not the default Beats pipeline from the image
+- Despite that open hygiene item, the functional Phase 6 goal is complete because data is reaching Elasticsearch and is visible in Kibana
+
+### Files created or updated during Phase 6
+
+- `logstash/pipeline.conf`
+- `docker-compose.yml`
+- `Goals.md`
+- `context/project_context.md`
