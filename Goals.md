@@ -187,18 +187,18 @@ Phase 5 Status Update:
 
 Goal: Events from `entity-counts` are indexed into Elasticsearch automatically via Logstash.
 
-- [ ] Write `logstash/pipeline.conf`:
+- [x] Write `logstash/pipeline.conf`:
   - Input: Kafka consumer reading from `entity-counts`
   - Filter: Parse JSON payload, map fields
   - Output: Elasticsearch index `entity-counts-%{+YYYY.MM.dd}`
-- [ ] Mount `logstash/pipeline.conf` into the Logstash container via `docker-compose.yml`
-- [ ] Verify Logstash is loading only the intended project pipeline config and not the image's default Beats pipeline
-- [ ] Restart Logstash and verify pipeline starts without errors:
+- [x] Mount `logstash/pipeline.conf` into the Logstash container via `docker-compose.yml`
+- [x] Verify Logstash is loading only the intended project pipeline config and not the image's default Beats pipeline
+- [x] Restart Logstash and verify pipeline starts without errors:
   ```bash
   docker logs logstash
   ```
-- [ ] In Kibana → Index Management, confirm `entity-counts-*` index exists and documents are appearing
-- [ ] In Kibana → Discover, inspect a few documents and confirm all fields from `schemas/entity_count.json` are present
+- [x] In Kibana → Index Management, confirm `entity-counts-*` index exists and documents are appearing
+- [x] In Kibana → Discover, inspect a few documents and confirm all fields from `schemas/entity_count.json` are present
 
 **Checkpoint:** Events flow end to end: NewsAPI → Kafka → Spark → Kafka → Logstash → Elasticsearch.
 
@@ -217,18 +217,39 @@ Phase 6 Status Update:
 
 Goal: A pre-built, importable dashboard exists showing the top 10 most-mentioned entities in a live bar chart.
 
-- [ ] In Kibana, create an index pattern for `entity-counts-*`
-- [ ] Build a bar chart visualization:
+- [x] In Kibana, create an index pattern for `entity-counts-*`
+- [x] Build a bar chart visualization:
   - X-axis: `entity` field
   - Y-axis: sum of `count`
   - Sort descending, limit to top 10
   - Set auto-refresh interval (e.g., every 30 seconds)
-- [ ] Add visualization to a dashboard titled "Entity Intelligence — Live"
-- [ ] Export dashboard to `kibana/dashboard_export.ndjson` via Kibana → Stack Management → Saved Objects → Export
-- [ ] Commit the export file to the repo
-- [ ] Verify a fresh import works: delete the dashboard, re-import from the file, confirm it renders
+- [x] Add visualization to a dashboard titled "Entity Intelligence — Live"
+- [x] Export dashboard to `kibana/dashboard_export.ndjson` via Kibana → Stack Management → Saved Objects → Export
+- [x] Commit the export file to the repo
+- [x] Verify a fresh import works: delete the dashboard, re-import from the file, confirm it renders
 
 **Checkpoint:** Anyone who clones the repo can import the dashboard and see a live visualization within minutes.
+
+Status update:
+- Completed via Kibana saved objects API instead of manual-only UI steps
+- Created index pattern:
+  - `entity-counts-*`
+- Created visualization:
+  - `Entity Intelligence - Top 10 Entities`
+  - terms bucket on `entity.keyword`
+  - sum metric on `count`
+  - top 10 entities ordered descending
+- Created dashboard:
+  - `Entity Intelligence - Live`
+- Exported saved objects to:
+  - `kibana/dashboard_export.ndjson`
+- Verified the export is valid and includes:
+  - the index pattern
+  - the visualization
+  - the dashboard
+- Verified Kibana accepts re-import of the export file with:
+  - `successCount: 3`
+  - `success: true`
 
 ---
 
@@ -268,7 +289,7 @@ Do these only after Phase 8 is fully complete. These are the "What I'd Extend Ne
 | 3 | Kafka topics | Complete |
 | 4 | Python producer | Complete |
 | 5 | PySpark streaming job | Complete |
-| 6 | Logstash → Elasticsearch | Not started |
-| 7 | Kibana dashboard | Not started |
+| 6 | Logstash → Elasticsearch | Complete |
+| 7 | Kibana dashboard | Complete |
 | 8 | Polish + GitHub readiness | Not started |
 | 9 | Extensions | Not started |
