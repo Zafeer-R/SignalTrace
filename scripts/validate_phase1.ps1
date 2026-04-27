@@ -79,6 +79,27 @@ function Check-ContainerRunning($ContainerName) {
     }
 }
 
+function Wait-ForHttpOk($Uri, $TimeoutSec = 60, $RetryIntervalSec = 5) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 10
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                return $response
+            }
+        }
+        catch {
+            Start-Sleep -Seconds $RetryIntervalSec
+            continue
+        }
+
+        Start-Sleep -Seconds $RetryIntervalSec
+    }
+
+    throw "Timed out waiting for HTTP success from $Uri"
+}
+
 $script:HadFailure = $false
 
 Write-Host "Validating Phase 1 in $RepoRoot"
@@ -103,13 +124,13 @@ foreach ($entry in $requiredPaths) {
 Check-CommandSucceeds -Description "docker compose config parses successfully" -Command "docker" -Arguments @("compose", "config") | Out-Null
 Check-CommandSucceeds -Description "docker compose ps executes successfully" -Command "docker" -Arguments @("compose", "ps") | Out-Null
 
-$containers = @("zookeeper", "78e252323029_kafka", "elasticsearch", "logstash", "kibana")
+$containers = @("zookeeper", "kafka", "elasticsearch", "logstash", "kibana")
 foreach ($container in $containers) {
     Check-ContainerRunning -ContainerName $container
 }
 
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:5601" -UseBasicParsing -TimeoutSec 10
+    $response = Wait-ForHttpOk -Uri "http://localhost:5601/api/status" -TimeoutSec 60 -RetryIntervalSec 5
     if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
         Pass "Kibana is reachable at http://localhost:5601"
     }
